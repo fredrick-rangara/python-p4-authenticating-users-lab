@@ -1,15 +1,13 @@
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
 from sqlalchemy_serializer import SerializerMixin
-
-metadata = MetaData(naming_convention={
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-})
-
-db = SQLAlchemy(metadata=metadata)
+# Import db from your config file instead of creating it here
+from config import db
 
 class Article(db.Model, SerializerMixin):
     __tablename__ = 'articles'
+
+    # Add serialization rules to avoid infinite recursion with relationships
+    serialize_rules = ('-user.articles',)
 
     id = db.Column(db.Integer, primary_key=True)
     author = db.Column(db.String)
@@ -22,15 +20,18 @@ class Article(db.Model, SerializerMixin):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
     def __repr__(self):
-        return f'Article {self.id} by {self.author}'
+        return f'<Article {self.id} by {self.author}>'
 
 class User(db.Model, SerializerMixin):
     __tablename__ = 'users'
 
+    # Add serialization rules to avoid infinite recursion
+    serialize_rules = ('-articles.user',)
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String, unique=True)
 
-    articles = db.relationship('Article', backref='user')
+    articles = db.relationship('Article', backref='user', cascade='all, delete-orphan')
 
     def __repr__(self):
-        return f'User {self.username}, ID {self.id}'
+        return f'<User {self.username}, ID {self.id}>'

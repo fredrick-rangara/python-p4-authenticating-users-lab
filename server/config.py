@@ -15,9 +15,18 @@ metadata = MetaData(naming_convention={
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
 })
 
+# 1. Initialize SQLAlchemy with metadata
 db = SQLAlchemy(metadata=metadata)
+
+# 2. Bind the app to the db
 db.init_app(app)
 
+# 3. CRITICAL: Push the app context. 
+# This solves the "App is not registered with this SQLAlchemy instance" error 
+# by ensuring the app is active whenever the database is accessed.
+app.app_context().push()
+
+# 4. Initialize other extensions
 migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 api = Api(app)
