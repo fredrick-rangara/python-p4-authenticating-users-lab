@@ -1,57 +1,56 @@
 #!/usr/bin/env python3
 
-from flask import Flask, make_response, jsonify, request, session
-from flask_migrate import Migrate
-from flask_restful import Api, Resource
+from flask import request, session
+from flask_restful import Resource
+from sqlalchemy.exc import IntegrityError
 
-from models import db, Article, User
+# Local imports
+from config import app, db, api
+from models import User
 
-app = Flask(__name__)
-app.secret_key = b'Y\xf1Xz\x00\xad|eQ\x80t \xca\x1a\x10K'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.json.compact = False
+# Resource Classes
+class Login(Resource):
+    def post(self):
+        # 1. Get username from request JSON
+        request_json = request.get_json()
+        username = request_json.get('username')
 
-migrate = Migrate(app, db)
+        # 2. Retrieve user by username
+        user = User.query.filter(User.username == username).first()
 
-db.init_app(app)
+        if user:
+            # 3. Set the session user_id
+            session['user_id'] = user.id
+            # 4. Return user and 200 status
+            return user.to_dict(), 200
+        
+        return {'error': 'Invalid username'}, 401
 
-api = Api(app)
-
-class ClearSession(Resource):
-
+class Logout(Resource):
     def delete(self):
-    
-        session['page_views'] = None
+        # 1. Remove the user_id from the session
         session['user_id'] = None
-
+        # 2. Return no data and 204 status
         return {}, 204
 
-class IndexArticle(Resource):
-    
+class CheckSession(Resource):
     def get(self):
-        articles = [article.to_dict() for article in Article.query.all()]
-        return articles, 200
+        # 1. Retrieve user_id from session
+        user_id = session.get('user_id')
+        
+        # 2. If it exists, find the user and return them
+        if user_id:
+            user = User.query.filter(User.id == user_id).first()
+            if user:
+                return user.to_dict(), 200
+        
+        # 3. If no user_id or user not found, 401 Unauthorized
+        return {'error': 'Unauthorized'}, 401
 
-class ShowArticle(Resource):
-
-    def get(self, id):
-        session['page_views'] = 0 if not session.get('page_views') else session.get('page_views')
-        session['page_views'] += 1
-
-        if session['page_views'] <= 3:
-
-            article = Article.query.filter(Article.id == id).first()
-            article_json = jsonify(article.to_dict())
-
-            return make_response(article_json, 200)
-
-        return {'message': 'Maximum pageview limit reached'}, 401
-
-api.add_resource(ClearSession, '/clear')
-api.add_resource(IndexArticle, '/articles')
-api.add_resource(ShowArticle, '/articles/<int:id>')
-
+# Add Routes
+api.add_resource(Login, '/login')
+api.add_resource(Logout, '/logout')
+api.add_resource(CheckSession, '/check_session')
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
